@@ -1,0 +1,204 @@
+### Go Template API - HTTP Requests Examples
+### Используйте этот файл для тестирования API в VS Code (REST Client) или IntelliJ IDEA (HTTP Client)
+
+@baseUrl = http://localhost:8080
+@adminToken =
+@userToken = 
+@requestId = 550e8400-e29b-41d4-a716-446655440000
+
+### ============================================
+### ШАГ 1: Публичные endpoints (не требуют авторизации)
+### ============================================
+
+### Ping - проверка доступности сервиса
+GET {{baseUrl}}/ping
+
+### Health check
+GET {{baseUrl}}/health
+
+### Up status
+GET {{baseUrl}}/up
+
+### Prometheus metrics
+GET {{baseUrl}}/metrics
+
+### ============================================
+### ШАГ 2: Регистрация и авторизация
+### ============================================
+
+### 2.1. Регистрация админа. Изменить роль на admin в БД
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "name": "Admin User",
+  "password": "admin123"
+}
+
+### 2.2. Регистрация первого пользователя, после деплоя надо закрыть админским доступом
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "name": "Regular User",
+  "password": "user123"
+}
+
+### 2.3. Авторизация админа
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "admin123"
+}
+
+### 2.4. Авторизация обычного пользователя
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "user123"
+}
+
+### ============================================
+### ШАГ 3: Работа с пользователями (только для админа)
+### ============================================
+### ВАЖНО: Все операции с /users требуют роль "admin"!
+### Если у пользователя роль "user", получите 403 Forbidden.
+
+### 3.1. Создать нового пользователя (только админ)
+POST {{baseUrl}}/users
+Authorization: Bearer {{adminToken}}
+Idempotency-Key: {{requestId}}
+Content-Type: application/json
+
+{
+  "email": "newuser@example.com",
+  "name": "New User",
+  "password": "password123"
+}
+
+### 3.2. Получить пользователя по UUID
+GET {{baseUrl}}/users/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{adminToken}}
+Idempotency-Key: {{requestId}}
+
+### 3.3. Обновить пользователя
+PATCH {{baseUrl}}/users/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{adminToken}}
+Idempotency-Key: {{requestId}}
+Content-Type: application/json
+
+{
+  "email": "updated@example.com",
+  "name": "Updated Name"
+}
+
+### 3.4. Удалить пользователя
+DELETE {{baseUrl}}/users/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{adminToken}}
+Idempotency-Key: {{requestId}}
+
+### ============================================
+### ШАГ 4: Self-service (/me)
+### ============================================
+### Любой авторизованный пользователь может управлять своим профилем
+
+### 4.1. Получить свой профиль
+GET {{baseUrl}}/me
+Authorization: Bearer {{userToken}}
+
+### 4.2. Обновить свой профиль
+PATCH {{baseUrl}}/me
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+  "name": "Updated Name"
+}
+
+### 4.3. Сменить пароль
+POST {{baseUrl}}/me/password
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+  "old_password": "user123",
+  "new_password": "newpassword123"
+}
+
+### ============================================
+### ШАГ 5: Проверка доступа (403 для не-админа)
+### ============================================
+
+### 5.1. Админский endpoint (только для админа + группа admin)
+GET {{baseUrl}}/admin
+Authorization: Bearer {{adminToken}}
+
+### ============================================
+### ШАГ 6: Проверка идемпотентности
+### ============================================
+
+### 6.1. Создать пользователя с Idempotency-Key
+POST {{baseUrl}}/users
+Authorization: Bearer {{adminToken}}
+Idempotency-Key: test-idempotency-key-123
+Content-Type: application/json
+
+{
+  "email": "idempotent@example.com",
+  "name": "Idempotent User",
+  "password": "password123"
+}
+
+### 6.2. Повторить тот же запрос с тем же Idempotency-Key
+POST {{baseUrl}}/users
+Authorization: Bearer {{adminToken}}
+Idempotency-Key: test-idempotency-key-123
+Content-Type: application/json
+
+{
+  "email": "idempotent@example.com",
+  "name": "Idempotent User",
+  "password": "password123"
+}
+
+### ============================================
+### ШАГ 7: Проверка обработки ошибок
+### ============================================
+
+### 7.1. Регистрация с существующим email (должен вернуть 409 Conflict)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "name": "Duplicate",
+  "password": "password123"
+}
+
+### 7.2. Создать пользователя с невалидным email (должен вернуть 400 Bad Request)
+POST {{baseUrl}}/users
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "email": "invalid-email",
+  "name": "Invalid",
+  "password": "pass"
+}
+
+### 7.3. Получить несуществующего пользователя (должен вернуть 404 Not Found)
+GET {{baseUrl}}/users/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{adminToken}}
+
+### 7.4. Запрос без токена (должен вернуть 401 Unauthorized)
+GET {{baseUrl}}/users/00000000-0000-0000-0000-000000000000
+
+### 7.5. Запрос с невалидным токеном (должен вернуть 401 Unauthorized)
+GET {{baseUrl}}/users/00000000-0000-0000-0000-000000000000
+Authorization: Bearer invalid.token.here
