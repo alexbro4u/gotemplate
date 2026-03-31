@@ -1,7 +1,7 @@
 include .env
 export
 
-.PHONY: help run build test clean deps docker-restart migrate-up migrate-down setup
+.PHONY: help run build test test-integration test-all mocks deps docker-restart migrate-up migrate-down setup
 
 run: ## Запустить приложение
 	go run main.go
@@ -9,8 +9,16 @@ run: ## Запустить приложение
 build: ## Собрать приложение
 	go build -o bin/gotemplate .
 
-test: ## Запустить тесты
-	go test ./...
+test: ## Запустить unit тесты
+	go test -race ./...
+
+test-integration: ## Запустить интеграционные тесты (нужен PostgreSQL)
+	go test -race -tags integration -count=1 ./...
+
+test-all: test test-integration ## Запустить все тесты
+
+mocks: ## Сгенерировать моки (mockery)
+	go run github.com/vektra/mockery/v2@latest
 
 deps: ## Загрузить зависимости
 	go mod download
