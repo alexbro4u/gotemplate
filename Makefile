@@ -1,4 +1,4 @@
-include .env
+-include .env
 export
 
 .PHONY: help run build test test-integration test-all mocks deps docker-restart migrate-up migrate-down setup
@@ -12,8 +12,12 @@ build: ## Собрать приложение
 test: ## Запустить unit тесты
 	go test -race ./...
 
-test-integration: ## Запустить интеграционные тесты (нужен PostgreSQL)
-	go test -race -tags integration -count=1 ./...
+test-integration: ## Запустить интеграционные тесты (поднимает тестовый PostgreSQL в Docker)
+	docker-compose -f docker-compose.test.yml up -d --wait
+	TEST_POSTGRES_PORT=5433 go test -race -tags integration -count=1 -p 1 ./...; \
+	  EXIT_CODE=$$?; \
+	  docker-compose -f docker-compose.test.yml down; \
+	  exit $$EXIT_CODE
 
 test-all: test test-integration ## Запустить все тесты
 

@@ -94,7 +94,7 @@ jobs:
         TEST_POSTGRES_USER: gotemplate_test
         TEST_POSTGRES_PASSWORD: gotemplate_test
         TEST_POSTGRES_DB: gotemplate_test
-      run: go test -v -race -tags integration -count=1 ./...
+      run: go test -v -race -tags integration -count=1 -p 1 ./...
 
   lint:
     name: Lint
