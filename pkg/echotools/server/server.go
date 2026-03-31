@@ -11,6 +11,8 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+var errHandlerNotEcho = errors.New("handler must be *echo.Echo")
+
 const (
 	DefaultMaxHeaderBytes    = 1 << 20
 	DefaultReadTimeout       = 30 * time.Second
@@ -70,7 +72,7 @@ func New(config Config, options ...Option) (*Server, error) {
 		if e, ok := config.Handler.(*echo.Echo); ok {
 			echoInstance = e
 		} else {
-			return nil, fmt.Errorf("handler must be *echo.Echo")
+			return nil, errHandlerNotEcho
 		}
 	}
 
@@ -115,7 +117,7 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) Stop(ctx context.Context) error {
-	s.logger.Info("shutting down http server")
+	s.logger.InfoContext(ctx, "shutting down http server")
 
 	if err := s.server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)

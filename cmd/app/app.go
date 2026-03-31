@@ -16,7 +16,7 @@ func New(cfg *config.Config) *cobra.Command {
 		Short: "Start gotemplate server",
 		Run: func(_ *cobra.Command, _ []string) {
 			if err := core.Run(cfg); err != nil {
-				slog.Error("failed to run app", slog.Any("error", err))
+				slog.Default().Error("failed to run app", slog.Any("error", err))
 				os.Exit(1)
 			}
 		},

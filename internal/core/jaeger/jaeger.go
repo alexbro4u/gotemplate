@@ -31,7 +31,7 @@ func (tp *TracerProvider) Shutdown(ctx context.Context) error {
 
 func New(cfg config.Jaeger, httpServer EchoServer) (*TracerProvider, error) {
 	if cfg.URL == "" {
-		return nil, nil
+		return nil, nil //nolint:nilnil // nil TracerProvider means tracing is disabled
 	}
 
 	var options []otlptracehttp.Option

@@ -3,13 +3,13 @@ package user
 import (
 	"net/http"
 
-	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"github.com/alexbro4u/gotemplate/internal/dto/controller"
 	"github.com/alexbro4u/gotemplate/internal/dto/service"
 	usersvc "github.com/alexbro4u/gotemplate/internal/layers/services/user"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 )
 
 type Deps struct {
@@ -78,11 +78,11 @@ func (c *Controller) Update(ctx echo.Context) error {
 	}
 
 	var req controller.UpdateUserRequest
-	if err := ctx.Bind(&req); err != nil {
+	if bindErr := ctx.Bind(&req); bindErr != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	if err := c.validator.Struct(req); err != nil {
+	if validErr := c.validator.Struct(req); validErr != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "validation failed")
 	}
 

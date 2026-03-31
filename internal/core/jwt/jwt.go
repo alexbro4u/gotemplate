@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,11 +15,11 @@ const (
 )
 
 type Claims struct {
-	UserUUID uuid.UUID `json:"user_uuid"`
-	Email    string    `json:"email"`
-	Role     string    `json:"role"`
-	Groups   []string  `json:"groups"`
-	TokenType string   `json:"token_type"`
+	UserUUID  uuid.UUID `json:"user_uuid"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role"`
+	Groups    []string  `json:"groups"`
+	TokenType string    `json:"token_type"`
 	jwt.RegisteredClaims
 }
 
@@ -116,23 +117,23 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 		return nil, fmt.Errorf("parse token: %w", err)
 	}
 	if !token.Valid {
-		return nil, fmt.Errorf("token invalid")
+		return nil, errors.New("token invalid")
 	}
 
 	claims, ok := token.Claims.(*Claims)
 	if !ok {
-		return nil, fmt.Errorf("invalid token claims type")
+		return nil, errors.New("invalid token claims type")
 	}
 
 	now := time.Now()
 	if claims.ExpiresAt != nil && claims.ExpiresAt.Time.Before(now) {
-		return nil, fmt.Errorf("token expired")
+		return nil, errors.New("token expired")
 	}
 	if claims.NotBefore != nil && claims.NotBefore.Time.After(now) {
-		return nil, fmt.Errorf("token not yet valid")
+		return nil, errors.New("token not yet valid")
 	}
 	if claims.IssuedAt != nil && claims.IssuedAt.Time.After(now) {
-		return nil, fmt.Errorf("token issued in the future")
+		return nil, errors.New("token issued in the future")
 	}
 
 	return claims, nil
@@ -144,7 +145,7 @@ func (s *Service) ValidateRefreshToken(tokenString string) (*Claims, error) {
 		return nil, err
 	}
 	if claims.TokenType != "refresh" {
-		return nil, fmt.Errorf("not a refresh token")
+		return nil, errors.New("not a refresh token")
 	}
 	return claims, nil
 }

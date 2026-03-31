@@ -1,4 +1,4 @@
-package request_cache
+package requestcache
 
 import (
 	"context"
@@ -6,10 +6,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/alexbro4u/gotemplate/internal/dto/repository"
 	"github.com/alexbro4u/gotemplate/internal/entity"
 	apperrors "github.com/alexbro4u/gotemplate/internal/errors"
+	"github.com/jmoiron/sqlx"
 
 	"github.com/go-playground/validator/v10"
 )

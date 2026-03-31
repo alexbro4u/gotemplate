@@ -9,7 +9,6 @@ import (
 
 	"git.ptb.bet/public-group/shared/v2/pkg/metrics"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/alexbro4u/gotemplate/internal/config"
 	"github.com/alexbro4u/gotemplate/internal/core/jwt"
 	coremetrics "github.com/alexbro4u/gotemplate/internal/core/metrics"
@@ -18,6 +17,7 @@ import (
 	"github.com/alexbro4u/gotemplate/internal/layers/middlewares/idempotency"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories"
 	"github.com/alexbro4u/gotemplate/pkg/echotools/server"
+	"github.com/jmoiron/sqlx"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
@@ -42,7 +42,7 @@ type Server struct {
 	logger                *slog.Logger
 }
 
-func New(ctx context.Context, deps Deps) (*Server, error) {
+func New(_ context.Context, deps Deps) (*Server, error) {
 	if err := deps.Validator.Struct(deps); err != nil {
 		return nil, err
 	}
@@ -93,9 +93,9 @@ func (s *Server) StartCleanup(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := s.idempotencyMiddleware.CleanupOld(ctx); err != nil {
-				s.logger.Warn("failed to cleanup idempotency cache", "error", err)
+				s.logger.WarnContext(ctx, "failed to cleanup idempotency cache", "error", err)
 			} else {
-				s.logger.Debug("idempotency cache cleanup completed")
+				s.logger.DebugContext(ctx, "idempotency cache cleanup completed")
 			}
 		}
 	}
@@ -113,7 +113,7 @@ func corsFromConfig(allowedOriginsCSV string) echo.MiddlewareFunc {
 	})
 }
 
-func registerRoutes(e *echo.Echo, controllers *controllers.Controllers, metricsFactory *coremetrics.Factory, jwtService *jwt.Service, repos *repositories.Repositories, cfg *config.Config, idempotencyMiddleware *idempotency.Middleware) {
+func registerRoutes(e *echo.Echo, controllers *controllers.Controllers, metricsFactory *coremetrics.Factory, jwtService *jwt.Service, _ *repositories.Repositories, cfg *config.Config, idempotencyMiddleware *idempotency.Middleware) {
 	// Infra endpoints (без версии)
 	e.GET("/ping", controllers.Ping.Ping)
 	e.GET(metrics.HealthEndpointPath, metricsFactory.EchoHealthHandler())
@@ -133,7 +133,7 @@ func registerRoutes(e *echo.Echo, controllers *controllers.Controllers, metricsF
 			Burst:     authRateLimitBurst,
 			ExpiresIn: authRateLimitExpiresIn,
 		}),
-		DenyHandler: func(c echo.Context, identifier string, err error) error {
+		DenyHandler: func(c echo.Context, _ string, _ error) error {
 			return c.JSON(http.StatusTooManyRequests, map[string]string{"message": "too many requests"})
 		},
 	}))

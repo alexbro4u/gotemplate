@@ -11,12 +11,13 @@ import (
 
 	stderrors "errors"
 
-	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
-	"github.com/labstack/echo/v4"
 	"github.com/alexbro4u/gotemplate/internal/dto/repository"
 	apperrors "github.com/alexbro4u/gotemplate/internal/errors"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories"
+
+	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
+	"github.com/labstack/echo/v4"
 )
 
 const (
@@ -45,7 +46,7 @@ func (m *Middleware) SetLogger(logger *slog.Logger) {
 	m.logger = logger
 }
 
-func (m *Middleware) Middleware() echo.MiddlewareFunc {
+func (m *Middleware) Middleware() echo.MiddlewareFunc { //nolint:funlen,gocognit // idempotency middleware is inherently complex
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Получаем user_id из контекст
@@ -98,8 +99,8 @@ func (m *Middleware) Middleware() echo.MiddlewareFunc {
 			}()
 
 			lockKey := m.getAdvisoryLockKey(idempotencyKey)
-			if err := m.acquireXactLock(c.Request().Context(), tx, lockKey); err != nil {
-				m.logger.Warn("failed to acquire xact lock", "idempotency_key", idempotencyKey, "error", err)
+			if lockErr := m.acquireXactLock(c.Request().Context(), tx, lockKey); lockErr != nil {
+				m.logger.Warn("failed to acquire xact lock", "idempotency_key", idempotencyKey, "error", lockErr)
 				return echo.NewHTTPError(http.StatusServiceUnavailable, "could not acquire lock")
 			}
 
@@ -155,7 +156,7 @@ func (m *Middleware) Middleware() echo.MiddlewareFunc {
 			m.cache.Set(cacheKey, cacheValue)
 
 			expiresAt := time.Now().AddDate(0, 0, m.ttlDays)
-			if err := m.repos.Create(c.Request().Context(), repository.CreateRequestCacheInput{
+			if createErr := m.repos.Create(c.Request().Context(), repository.CreateRequestCacheInput{
 				UserID:      userID,
 				Path:        path,
 				HTTPVerb:    httpVerb,
@@ -164,19 +165,19 @@ func (m *Middleware) Middleware() echo.MiddlewareFunc {
 				StatusCode:  statusCode,
 				ContentType: contentType,
 				ExpiresAt:   expiresAt,
-			}); err != nil {
+			}); createErr != nil {
 				m.logger.Warn("failed to save request cache to DB",
-					"error", err,
+					"error", createErr,
 					"idempotency_key", idempotencyKey,
 					"user_id", userID.String(),
 					"path", path,
 					"status_code", statusCode,
 					"body_len", len(responseBytes),
 				)
-				return err
+				return createErr
 			}
-			if err := tx.Commit(); err != nil {
-				m.logger.Warn("failed to commit idempotency tx", "error", err)
+			if commitErr := tx.Commit(); commitErr != nil {
+				m.logger.Warn("failed to commit idempotency tx", "error", commitErr)
 				return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit")
 			}
 
@@ -211,8 +212,8 @@ func (rw *responseWriter) WriteHeader(statusCode int) {
 
 func (m *Middleware) getAdvisoryLockKey(idempotencyKey string) int64 {
 	h := fnv.New64a()
-	h.Write([]byte(idempotencyKey))
-	return int64(h.Sum64())
+	_, _ = h.Write([]byte(idempotencyKey))
+	return int64(h.Sum64()) //nolint:gosec // advisory lock key, overflow is acceptable
 }
 
 func (m *Middleware) acquireXactLock(ctx context.Context, tx *sqlx.Tx, lockKey int64) error {
@@ -236,7 +237,7 @@ func (m *Middleware) getCachedByKey(ctx context.Context, cacheKey CacheKey) (*Ca
 		if apperrors.CodeIs(err, apperrors.CodeUserNotFound) {
 			return nil, false
 		}
-		m.logger.Warn("failed to query request cache", "error", err, "cache_key", cacheKey)
+		m.logger.WarnContext(ctx, "failed to query request cache", "error", err, "cache_key", cacheKey)
 		return nil, false
 	}
 
@@ -264,7 +265,7 @@ func (m *Middleware) writeCachedResponse(c echo.Context, value *CacheValue) erro
 	return c.Blob(value.StatusCode, contentType, value.Response)
 }
 
-// CleanupOld удаляет старые записи из in-memory кэша
+// CleanupOld удаляет старые записи из in-memory кэша.
 func (m *Middleware) CleanupOld(ctx context.Context) error {
 	before := time.Now().AddDate(0, 0, -m.ttlDays)
 	m.cache.DeleteOld(before)

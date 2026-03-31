@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // register postgres driver
 )
 
 func env(key, fallback string) string {
@@ -21,12 +22,16 @@ func env(key, fallback string) string {
 }
 
 func DSN() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		env("TEST_POSTGRES_USER", "gotemplate_test"),
-		env("TEST_POSTGRES_PASSWORD", "gotemplate_test"),
-		env("TEST_POSTGRES_HOST", "localhost"),
-		env("TEST_POSTGRES_PORT", "5432"),
-		env("TEST_POSTGRES_DB", "gotemplate_test"),
+	host := env("TEST_POSTGRES_HOST", "localhost")
+	port := env("TEST_POSTGRES_PORT", "5432")
+	user := env("TEST_POSTGRES_USER", "gotemplate_test")
+	password := env("TEST_POSTGRES_PASSWORD", "gotemplate_test")
+	db := env("TEST_POSTGRES_DB", "gotemplate_test")
+	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable",
+		user,
+		password,
+		net.JoinHostPort(host, port),
+		db,
 	)
 }
 
@@ -36,7 +41,11 @@ func NewTestDB(t *testing.T) *sqlx.DB {
 	if err != nil {
 		t.Fatalf("connect to test db: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() {
+		if closeErr := db.Close(); closeErr != nil {
+			t.Logf("close test db: %v", closeErr)
+		}
+	})
 	return db
 }
 
@@ -62,12 +71,12 @@ func RunMigrations(t *testing.T, db *sqlx.DB) {
 	sort.Strings(upFiles)
 
 	for _, name := range upFiles {
-		data, err := os.ReadFile(filepath.Join(dir, name))
-		if err != nil {
-			t.Fatalf("read migration %s: %v", name, err)
+		data, readErr := os.ReadFile(filepath.Join(dir, name))
+		if readErr != nil {
+			t.Fatalf("read migration %s: %v", name, readErr)
 		}
-		if _, err := db.Exec(string(data)); err != nil {
-			t.Fatalf("exec migration %s: %v", name, err)
+		if _, execErr := db.Exec(string(data)); execErr != nil {
+			t.Fatalf("exec migration %s: %v", name, execErr)
 		}
 	}
 }

@@ -4,13 +4,13 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/alexbro4u/uowkit/uow"
 	"github.com/alexbro4u/gotemplate/internal/dto/repository"
 	"github.com/alexbro4u/gotemplate/internal/dto/service"
 	apperrors "github.com/alexbro4u/gotemplate/internal/errors"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories"
 	"github.com/alexbro4u/gotemplate/pkg/password"
 	"github.com/alexbro4u/gotemplate/pkg/sqlxadapter"
+	"github.com/alexbro4u/uowkit/uow"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -57,7 +57,7 @@ func (s *Service) Create(ctx context.Context, in service.CreateUserInput) (*serv
 
 	var output *repository.CreateUserOutput
 
-	if err := s.uow.Do(ctx, func(tx uow.Tx) error {
+	if txErr := s.uow.Do(ctx, func(tx uow.Tx) error {
 		sqlxTx, ok := sqlxadapter.Unwrap(tx)
 		if !ok {
 			return apperrors.New("unexpected tx type")
@@ -66,27 +66,27 @@ func (s *Service) Create(ctx context.Context, in service.CreateUserInput) (*serv
 		userRepoTx := s.userRepo.WithExecutor(sqlxTx)
 		userGroupRepoTx := s.userGroupRepo.WithExecutor(sqlxTx)
 
-		var err error
-		output, err = userRepoTx.Create(ctx, repository.CreateUserInput{
+		var createErr error
+		output, createErr = userRepoTx.Create(ctx, repository.CreateUserInput{
 			Email:        in.Email,
 			Name:         in.Name,
 			PasswordHash: passwordHash,
 			Role:         nil,
 		})
-		if err != nil {
-			return err
+		if createErr != nil {
+			return createErr
 		}
 
-		if err := userGroupRepoTx.AddUserToGroup(ctx, output.User.ID, "users"); err != nil {
-			return apperrors.Wrap(err, "add user to default group")
+		if groupErr := userGroupRepoTx.AddUserToGroup(ctx, output.User.ID, "users"); groupErr != nil {
+			return apperrors.Wrap(groupErr, "add user to default group")
 		}
 
 		return nil
-	}); err != nil {
-		if apperrors.CodeIs(err, apperrors.CodeUniqueViolation) {
+	}); txErr != nil {
+		if apperrors.CodeIs(txErr, apperrors.CodeUniqueViolation) {
 			return nil, apperrors.ErrUserAlreadyExists
 		}
-		return nil, apperrors.Wrap(err, "create user tx")
+		return nil, apperrors.Wrap(txErr, "create user tx")
 	}
 
 	return &service.CreateUserOutput{

@@ -4,8 +4,6 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/alexbro4u/uowkit/uow"
-	"github.com/google/uuid"
 	"github.com/alexbro4u/gotemplate/internal/core/jwt"
 	"github.com/alexbro4u/gotemplate/internal/dto/repository"
 	"github.com/alexbro4u/gotemplate/internal/dto/service"
@@ -14,6 +12,7 @@ import (
 	"github.com/alexbro4u/gotemplate/pkg/password"
 	"github.com/alexbro4u/gotemplate/pkg/sqlxadapter"
 
+	"github.com/alexbro4u/uowkit/uow"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -62,7 +61,7 @@ func (s *Service) Register(ctx context.Context, in service.RegisterInput) (*serv
 
 	var createOutput *repository.CreateUserOutput
 
-	if err := s.uow.Do(ctx, func(tx uow.Tx) error {
+	if txErr := s.uow.Do(ctx, func(tx uow.Tx) error {
 		sqlxTx, ok := sqlxadapter.Unwrap(tx)
 		if !ok {
 			return apperrors.New("unexpected tx type")
@@ -71,27 +70,27 @@ func (s *Service) Register(ctx context.Context, in service.RegisterInput) (*serv
 		userRepoTx := s.userRepo.WithExecutor(sqlxTx)
 		userGroupRepoTx := s.userGroupRepo.WithExecutor(sqlxTx)
 
-		var err error
-		createOutput, err = userRepoTx.Create(ctx, repository.CreateUserInput{
+		var createErr error
+		createOutput, createErr = userRepoTx.Create(ctx, repository.CreateUserInput{
 			Email:        in.Email,
 			Name:         in.Name,
 			PasswordHash: passwordHash,
 			Role:         nil,
 		})
-		if err != nil {
-			return err
+		if createErr != nil {
+			return createErr
 		}
 
-		if err := userGroupRepoTx.AddUserToGroup(ctx, createOutput.User.ID, "users"); err != nil {
-			return apperrors.Wrap(err, "add user to default group")
+		if groupErr := userGroupRepoTx.AddUserToGroup(ctx, createOutput.User.ID, "users"); groupErr != nil {
+			return apperrors.Wrap(groupErr, "add user to default group")
 		}
 
 		return nil
-	}); err != nil {
-		if apperrors.CodeIs(err, apperrors.CodeUniqueViolation) {
+	}); txErr != nil {
+		if apperrors.CodeIs(txErr, apperrors.CodeUniqueViolation) {
 			return nil, apperrors.ErrUserAlreadyExists
 		}
-		return nil, apperrors.Wrap(err, "register tx")
+		return nil, apperrors.Wrap(txErr, "register tx")
 	}
 
 	groups, err := s.userGroupRepo.GetGroupNamesByUserID(ctx, createOutput.User.ID)
@@ -249,17 +248,12 @@ func (s *Service) ChangePassword(ctx context.Context, in service.ChangePasswordI
 		return apperrors.Wrap(err, "hash new password")
 	}
 
-	if err := s.userRepo.UpdatePassword(ctx, repository.UpdatePasswordInput{
+	if updErr := s.userRepo.UpdatePassword(ctx, repository.UpdatePasswordInput{
 		UUID:         in.UserUUID,
 		PasswordHash: newHash,
-	}); err != nil {
-		return apperrors.Wrap(err, "update password")
+	}); updErr != nil {
+		return apperrors.Wrap(updErr, "update password")
 	}
 
 	return nil
-}
-
-// parseUUID is a helper to parse UUID strings used in auth context.
-func parseUUID(s string) (uuid.UUID, error) {
-	return uuid.Parse(s)
 }

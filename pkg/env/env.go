@@ -1,6 +1,7 @@
 package env
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -15,16 +16,16 @@ func Parse(envFile string, cfg interface{}) error {
 
 	v := reflect.ValueOf(cfg)
 	if v.Kind() != reflect.Ptr || v.Elem().Kind() != reflect.Struct {
-		return fmt.Errorf("config must be a pointer to struct")
+		return errors.New("config must be a pointer to struct")
 	}
 
 	return parseStruct(v.Elem())
 }
 
-func parseStruct(v reflect.Value) error {
+func parseStruct(v reflect.Value) error { //nolint:gocognit // struct parsing requires branching on field types
 	t := v.Type()
 
-	for i := 0; i < v.NumField(); i++ {
+	for i := range v.NumField() {
 		field := v.Field(i)
 		fieldType := t.Field(i)
 
@@ -80,7 +81,7 @@ func parseStruct(v reflect.Value) error {
 }
 
 func setFieldValue(field reflect.Value, value string) error {
-	switch field.Kind() {
+	switch field.Kind() { //nolint:exhaustive // env parsing only supports basic scalar types
 	case reflect.String:
 		field.SetString(value)
 

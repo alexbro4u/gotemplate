@@ -51,11 +51,13 @@ func (f *Factory) EnvLabel() string {
 	return ""
 }
 
+const keyValueParts = 2
+
 func parseConstLabels(raw string) prometheus.Labels {
 	result := make(prometheus.Labels)
 	for _, pair := range strings.Split(raw, ",") {
-		parts := strings.SplitN(strings.TrimSpace(pair), "=", 2)
-		if len(parts) == 2 {
+		parts := strings.SplitN(strings.TrimSpace(pair), "=", keyValueParts)
+		if len(parts) == keyValueParts {
 			key := strings.TrimSpace(parts[0])
 			if key != "" {
 				result[key] = strings.TrimSpace(parts[1])

@@ -11,14 +11,14 @@ import (
 func main() {
 	cfg, err := config.New()
 	if err != nil {
-		slog.Error("failed to load config", slog.Any("error", err))
+		slog.Default().Error("failed to load config", slog.Any("error", err))
 		os.Exit(1)
 	}
 
 	rootCmd := app.New(cfg)
 
-	if err := rootCmd.Execute(); err != nil {
-		slog.Error("failed to execute command", slog.Any("error", err))
+	if execErr := rootCmd.Execute(); execErr != nil {
+		slog.Default().Error("failed to execute command", slog.Any("error", execErr))
 		os.Exit(1)
 	}
 }

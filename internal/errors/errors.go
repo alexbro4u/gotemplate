@@ -10,7 +10,7 @@ import (
 const (
 	CodeUserNotFound       = "USER_NOT_FOUND"
 	CodeGroupNotFound      = "GROUP_NOT_FOUND"
-	CodeInvalidCredentials = "INVALID_CREDENTIALS"
+	CodeInvalidCredentials = "INVALID_CREDENTIALS" //nolint:gosec // error code, not credentials
 	CodeUserAlreadyExists  = "USER_ALREADY_EXISTS"
 	CodeUniqueViolation    = "UNIQUE_VIOLATION"
 	CodeValidationFailed   = "VALIDATION_FAILED"

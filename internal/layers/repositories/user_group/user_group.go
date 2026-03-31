@@ -1,17 +1,16 @@
-package user_group
+package usergroup
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 
-	"github.com/jmoiron/sqlx"
-
 	apperrors "github.com/alexbro4u/gotemplate/internal/errors"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories/transaction"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/jmoiron/sqlx"
 )
 
 type Deps struct {
@@ -59,13 +58,13 @@ func (r *Repository) GetGroupNamesByUserID(ctx context.Context, userID int64) ([
 	var names []string
 	for rows.Next() {
 		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, apperrors.Wrap(err, "scan group name")
+		if scanErr := rows.Scan(&name); scanErr != nil {
+			return nil, apperrors.Wrap(scanErr, "scan group name")
 		}
 		names = append(names, name)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, apperrors.Wrap(err, "rows")
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, apperrors.Wrap(rowsErr, "rows")
 	}
 	return names, nil
 }

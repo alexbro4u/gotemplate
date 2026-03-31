@@ -53,7 +53,11 @@ func (c *InMemoryCache) Get(key CacheKey) (*CacheValue, bool) {
 	}
 
 	c.order.MoveToFront(elem)
-	return elem.Value.(*lruEntry).value, true
+	entry, ok := elem.Value.(*lruEntry)
+	if !ok {
+		return nil, false
+	}
+	return entry.value, true
 }
 
 func (c *InMemoryCache) Set(key CacheKey, value *CacheValue) {
@@ -63,7 +67,9 @@ func (c *InMemoryCache) Set(key CacheKey, value *CacheValue) {
 	// Update existing
 	if elem, ok := c.items[key]; ok {
 		c.order.MoveToFront(elem)
-		elem.Value.(*lruEntry).value = value
+		if entry, entryOk := elem.Value.(*lruEntry); entryOk {
+			entry.value = value
+		}
 		return
 	}
 
@@ -83,14 +89,15 @@ func (c *InMemoryCache) DeleteOld(before time.Time) {
 
 	var toRemove []*list.Element
 	for elem := c.order.Back(); elem != nil; elem = elem.Prev() {
-		entry := elem.Value.(*lruEntry)
-		if entry.value.CreatedAt.Before(before) {
+		entry, ok := elem.Value.(*lruEntry)
+		if ok && entry.value.CreatedAt.Before(before) {
 			toRemove = append(toRemove, elem)
 		}
 	}
 	for _, elem := range toRemove {
-		entry := elem.Value.(*lruEntry)
-		delete(c.items, entry.key)
+		if entry, ok := elem.Value.(*lruEntry); ok {
+			delete(c.items, entry.key)
+		}
 		c.order.Remove(elem)
 	}
 }
@@ -101,7 +108,8 @@ func (c *InMemoryCache) evictLRU() {
 	if back == nil {
 		return
 	}
-	entry := back.Value.(*lruEntry)
-	delete(c.items, entry.key)
+	if entry, ok := back.Value.(*lruEntry); ok {
+		delete(c.items, entry.key)
+	}
 	c.order.Remove(back)
 }

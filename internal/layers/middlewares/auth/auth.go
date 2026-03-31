@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/labstack/echo/v4"
 	"github.com/alexbro4u/gotemplate/internal/core/jwt"
+	"github.com/labstack/echo/v4"
 )
 
 func Middleware(jwtService *jwt.Service) echo.MiddlewareFunc {
@@ -43,7 +43,7 @@ func Middleware(jwtService *jwt.Service) echo.MiddlewareFunc {
 	}
 }
 
-// RequireRole создает middleware для проверки роли пользователя
+// RequireRole создает middleware для проверки роли пользователя.
 func RequireRole(requiredRole string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -56,7 +56,7 @@ func RequireRole(requiredRole string) echo.MiddlewareFunc {
 	}
 }
 
-// RequireGroup создает middleware: доступ только если пользователь в указанной группе
+// RequireGroup создает middleware: доступ только если пользователь в указанной группе.
 func RequireGroup(requiredGroup string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -69,7 +69,7 @@ func RequireGroup(requiredGroup string) echo.MiddlewareFunc {
 	}
 }
 
-// RequireAnyGroup создает middleware: доступ только если пользователь в одной из указанных групп
+// RequireAnyGroup создает middleware: доступ только если пользователь в одной из указанных групп.
 func RequireAnyGroup(allowedGroups ...string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -112,7 +112,7 @@ func contains(slice []string, s string) bool {
 	return false
 }
 
-// GetUserUUID извлекает UUID пользователя из контекста
+// GetUserUUID извлекает UUID пользователя из контекста.
 func GetUserUUID(c echo.Context) (string, bool) {
 	uuidVal := c.Get("user_uuid")
 	if uuidVal == nil {

@@ -1,3 +1,4 @@
+//nolint:cyclop // bootstrap package has multiple init paths by design
 package core
 
 import (
@@ -8,8 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alexbro4u/uowkit/uow"
-	"github.com/go-playground/validator/v10"
 	"github.com/alexbro4u/gotemplate/internal/config"
 	"github.com/alexbro4u/gotemplate/internal/core/http"
 	"github.com/alexbro4u/gotemplate/internal/core/jaeger"
@@ -24,13 +23,17 @@ import (
 	"github.com/alexbro4u/gotemplate/pkg/closer"
 	"github.com/alexbro4u/gotemplate/pkg/pgxtools"
 	"github.com/alexbro4u/gotemplate/pkg/sqlxadapter"
+
+	"github.com/alexbro4u/uowkit/uow"
+	"github.com/go-playground/validator/v10"
 )
 
 const (
-	shutdownTimeout = 5 * time.Second
+	shutdownTimeout     = 5 * time.Second
+	dbConnectionTimeout = 10 * time.Second
 )
 
-func Run(cfg *config.Config) error {
+func Run(cfg *config.Config) error { //nolint:funlen // application bootstrap
 	validate := validator.New()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -60,7 +63,7 @@ func Run(cfg *config.Config) error {
 			PoolMinConns: cfg.Postgres.PoolMinConns,
 		},
 		Logger:  logger,
-		Timeout: 10 * time.Second,
+		Timeout: dbConnectionTimeout,
 	})
 	if err != nil {
 		return err
@@ -85,7 +88,7 @@ func Run(cfg *config.Config) error {
 		return err
 	}
 
-	userGroupRepo, err := user_group.New(user_group.Deps{
+	userGroupRepo, err := usergroup.New(usergroup.Deps{
 		DB:        db,
 		Validator: validate,
 	})
@@ -93,7 +96,7 @@ func Run(cfg *config.Config) error {
 		return err
 	}
 
-	requestCacheRepo, err := request_cache.New(request_cache.Deps{
+	requestCacheRepo, err := requestcache.New(requestcache.Deps{
 		DB:        db,
 		Validator: validate,
 	})
@@ -159,7 +162,7 @@ func Run(cfg *config.Config) error {
 			return tracerProvider.Shutdown(ctx)
 		})
 	}
-	closerInstance.Add(func(ctx context.Context) error {
+	closerInstance.Add(func(_ context.Context) error {
 		return dbConnection.Close()
 	})
 
@@ -175,9 +178,9 @@ func Run(cfg *config.Config) error {
 
 	select {
 	case <-ctx.Done():
-	case err := <-serverErr:
-		if err != nil {
-			logger.Error("http server exited", "error", err)
+	case srvErr := <-serverErr:
+		if srvErr != nil {
+			logger.Error("http server exited", "error", srvErr)
 		}
 		cancel()
 	}
@@ -186,11 +189,11 @@ func Run(cfg *config.Config) error {
 	logger.Info("shutting down application gracefully")
 
 	// Graceful shutdown
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer shutdownCancel()
 
-	if err := closerInstance.Close(shutdownCtx); err != nil {
-		return err
+	if closeErr := closerInstance.Close(shutdownCtx); closeErr != nil {
+		return closeErr
 	}
 
 	return nil

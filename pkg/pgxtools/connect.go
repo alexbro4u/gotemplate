@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // register postgres driver
 )
 
 type Config struct {
@@ -71,7 +71,7 @@ func Connect(ctx context.Context, options ConnectOptions) (*Connection, error) {
 		case <-time.After(1 * time.Second):
 			db, err := sqlx.ConnectContext(ctx, "postgres", postgresURI.String())
 			if err != nil {
-				logger.Error(
+				logger.ErrorContext(ctx,
 					"failed to connect to db",
 					slog.String("host", options.Config.Host),
 					slog.String("port", options.Config.Port),
@@ -86,13 +86,13 @@ func Connect(ctx context.Context, options ConnectOptions) (*Connection, error) {
 			db.SetMaxIdleConns(options.Config.PoolMinConns)
 			db.SetConnMaxLifetime(time.Hour)
 
-			if err := db.PingContext(ctx); err != nil {
-				logger.Error("failed to ping", slog.String("error", err.Error()))
-				db.Close()
+			if pingErr := db.PingContext(ctx); pingErr != nil {
+				logger.ErrorContext(ctx, "failed to ping", slog.String("error", pingErr.Error()))
+				_ = db.Close()
 				continue
 			}
 
-			logger.Info("successfully connected to database",
+			logger.InfoContext(ctx, "successfully connected to database",
 				slog.String("host", options.Config.Host),
 				slog.String("database", options.Config.Database),
 			)

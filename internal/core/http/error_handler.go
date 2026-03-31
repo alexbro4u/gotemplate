@@ -22,9 +22,10 @@ func newErrorHandler(logger *slog.Logger) echo.HTTPErrorHandler {
 		}
 
 		// Echo's own HTTP errors (from middleware, bind, etc.)
-		if he, ok := err.(*echo.HTTPError); ok {
+		var he *echo.HTTPError
+		if errors.As(err, &he) {
 			msg := "error"
-			if m, ok := he.Message.(string); ok {
+			if m, msgOk := he.Message.(string); msgOk {
 				msg = m
 			}
 			_ = c.JSON(he.Code, errorResponse{
@@ -44,7 +45,7 @@ func newErrorHandler(logger *slog.Logger) echo.HTTPErrorHandler {
 				Code:  code,
 			}
 
-			if status >= 500 {
+			if status >= http.StatusInternalServerError {
 				logger.Error("internal error",
 					slog.Any("error", err),
 					slog.Int("status", status),

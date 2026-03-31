@@ -2,10 +2,11 @@ package http
 
 import (
 	"log/slog"
+	"net/http"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/alexbro4u/gotemplate/internal/core/requestid"
+	"github.com/labstack/echo/v4"
 )
 
 // requestIDMiddleware generates or extracts a request ID and stores it in context.
@@ -54,9 +55,9 @@ func requestLoggingMiddleware(logger *slog.Logger) echo.MiddlewareFunc {
 			}
 
 			level := slog.LevelInfo
-			if status >= 500 {
+			if status >= http.StatusInternalServerError {
 				level = slog.LevelError
-			} else if status >= 400 {
+			} else if status >= http.StatusBadRequest {
 				level = slog.LevelWarn
 			}
 
