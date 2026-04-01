@@ -16,6 +16,8 @@ import (
 	"github.com/alexbro4u/gotemplate/internal/core/jwt"
 	"github.com/alexbro4u/gotemplate/internal/dto/service"
 	apperrors "github.com/alexbro4u/gotemplate/internal/errors"
+	blacklistrepo "github.com/alexbro4u/gotemplate/internal/layers/repositories/blacklist"
+	passwordresetrepo "github.com/alexbro4u/gotemplate/internal/layers/repositories/password_reset"
 	userrepo "github.com/alexbro4u/gotemplate/internal/layers/repositories/user"
 	usergrouprepo "github.com/alexbro4u/gotemplate/internal/layers/repositories/user_group"
 	authservice "github.com/alexbro4u/gotemplate/internal/layers/services/auth"
@@ -35,17 +37,23 @@ func setupIntegrationAuth(t *testing.T) *authservice.Service {
 	require.NoError(t, err)
 	ugr, err := usergrouprepo.New(usergrouprepo.Deps{DB: db, Validator: v})
 	require.NoError(t, err)
+	br, err := blacklistrepo.New(blacklistrepo.Deps{DB: db, Validator: v})
+	require.NoError(t, err)
+	pr, err := passwordresetrepo.New(passwordresetrepo.Deps{DB: db, Validator: v})
+	require.NoError(t, err)
 
 	txFactory := sqlxadapter.NewTxFactory(db, nil)
 	unitOfWork := uow.New(txFactory)
 
 	svc, err := authservice.New(authservice.Deps{
-		Logger:        slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})),
-		UoW:           unitOfWork,
-		UserRepo:      ur,
-		UserGroupRepo: ugr,
-		JWTService:    jwt.New("integration-test-secret-key-minimum-32-chars!!"),
-		Validator:     v,
+		Logger:            slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})),
+		UoW:               unitOfWork,
+		UserRepo:          ur,
+		UserGroupRepo:     ugr,
+		BlacklistRepo:     br,
+		PasswordResetRepo: pr,
+		JWTService:        jwt.New("integration-test-secret-key-minimum-32-chars!!"),
+		Validator:         v,
 	})
 	require.NoError(t, err)
 	return svc

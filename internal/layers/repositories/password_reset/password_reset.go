@@ -8,6 +8,8 @@ import (
 	"github.com/alexbro4u/gotemplate/internal/dto/repository"
 	apperrors "github.com/alexbro4u/gotemplate/internal/errors"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories"
+	"github.com/alexbro4u/gotemplate/internal/layers/repositories/transaction"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/jmoiron/sqlx"
 )
@@ -18,18 +20,19 @@ type Deps struct {
 }
 
 type Repository struct {
-	db *sqlx.DB
+	db   *sqlx.DB
+	exec transaction.SqlxTx
 }
 
 func New(deps Deps) (*Repository, error) {
 	if err := deps.Validator.Struct(deps); err != nil {
 		return nil, apperrors.Wrap(err, "validate deps")
 	}
-	return &Repository{db: deps.DB}, nil
+	return &Repository{db: deps.DB, exec: deps.DB}, nil
 }
 
 func (r *Repository) Create(ctx context.Context, in repository.CreatePasswordResetInput) error {
-	_, err := r.db.ExecContext(ctx,
+	_, err := r.exec.ExecContext(ctx,
 		`INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES ($1, $2, $3)`,
 		in.Token, in.UserID, in.ExpiresAt,
 	)
@@ -66,13 +69,20 @@ func (r *Repository) MarkUsed(ctx context.Context, in repository.MarkPasswordRes
 }
 
 func (r *Repository) DeleteExpired(ctx context.Context) error {
-	_, err := r.db.ExecContext(ctx,
+	_, err := r.exec.ExecContext(ctx,
 		`DELETE FROM password_reset_tokens WHERE expires_at < NOW() OR used = TRUE`,
 	)
 	if err != nil {
 		return apperrors.Wrap(err, "delete expired password reset tokens")
 	}
 	return nil
+}
+
+func (r *Repository) WithExecutor(exec transaction.SqlxTx) repositories.PasswordResetRepository {
+	if exec == nil {
+		exec = r.db
+	}
+	return &Repository{db: r.db, exec: exec}
 }
 
 var _ repositories.PasswordResetRepository = (*Repository)(nil)

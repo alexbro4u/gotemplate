@@ -23,7 +23,7 @@ func env(key, fallback string) string {
 
 func DSN() string {
 	host := env("TEST_POSTGRES_HOST", "localhost")
-	port := env("TEST_POSTGRES_PORT", "5432")
+	port := env("TEST_POSTGRES_PORT", "5433")
 	user := env("TEST_POSTGRES_USER", "gotemplate_test")
 	password := env("TEST_POSTGRES_PASSWORD", "gotemplate_test")
 	db := env("TEST_POSTGRES_DB", "gotemplate_test")
@@ -83,7 +83,14 @@ func RunMigrations(t *testing.T, db *sqlx.DB) {
 
 func TruncateAll(t *testing.T, db *sqlx.DB) {
 	t.Helper()
-	tables := []string{"user_groups", "request_cache", "users", "groups"}
+	tables := []string{
+		"password_reset_tokens",
+		"token_blacklist",
+		"user_groups",
+		"request_cache",
+		"users",
+		"groups",
+	}
 	for _, table := range tables {
 		if _, err := db.Exec(fmt.Sprintf("TRUNCATE TABLE %s CASCADE", table)); err != nil {
 			t.Fatalf("truncate %s: %v", table, err)
