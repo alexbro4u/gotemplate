@@ -15,6 +15,9 @@ const (
 	CodeUniqueViolation    = "UNIQUE_VIOLATION"
 	CodeValidationFailed   = "VALIDATION_FAILED"
 	CodeInternal           = "INTERNAL"
+	CodeTokenNotFound      = "TOKEN_NOT_FOUND"
+	CodeTokenExpired       = "TOKEN_EXPIRED"
+	CodeTokenAlreadyUsed   = "TOKEN_ALREADY_USED"
 )
 
 var (
@@ -41,6 +44,18 @@ var (
 	ErrRequestCacheNotFound = errkit.New("request cache not found",
 		errkit.Code(CodeUserNotFound),
 		errkit.HTTP(http.StatusNotFound),
+	)
+	ErrTokenNotFound = errkit.New("token not found",
+		errkit.Code(CodeTokenNotFound),
+		errkit.HTTP(http.StatusNotFound),
+	)
+	ErrTokenExpired = errkit.New("token expired",
+		errkit.Code(CodeTokenExpired),
+		errkit.HTTP(http.StatusGone),
+	)
+	ErrTokenAlreadyUsed = errkit.New("token already used",
+		errkit.Code(CodeTokenAlreadyUsed),
+		errkit.HTTP(http.StatusConflict),
 	)
 )
 

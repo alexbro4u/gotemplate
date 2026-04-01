@@ -404,6 +404,53 @@ func (_c *MockUserRepository_UpdatePassword_Call) RunAndReturn(run func(context.
 	return _c
 }
 
+// UpdatePasswordByID provides a mock function with given fields: ctx, in
+func (_m *MockUserRepository) UpdatePasswordByID(ctx context.Context, in repository.UpdatePasswordByIDInput) error {
+	ret := _m.Called(ctx, in)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdatePasswordByID")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, repository.UpdatePasswordByIDInput) error); ok {
+		r0 = rf(ctx, in)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockUserRepository_UpdatePasswordByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdatePasswordByID'
+type MockUserRepository_UpdatePasswordByID_Call struct {
+	*mock.Call
+}
+
+// UpdatePasswordByID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in repository.UpdatePasswordByIDInput
+func (_e *MockUserRepository_Expecter) UpdatePasswordByID(ctx interface{}, in interface{}) *MockUserRepository_UpdatePasswordByID_Call {
+	return &MockUserRepository_UpdatePasswordByID_Call{Call: _e.mock.On("UpdatePasswordByID", ctx, in)}
+}
+
+func (_c *MockUserRepository_UpdatePasswordByID_Call) Run(run func(ctx context.Context, in repository.UpdatePasswordByIDInput)) *MockUserRepository_UpdatePasswordByID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(repository.UpdatePasswordByIDInput))
+	})
+	return _c
+}
+
+func (_c *MockUserRepository_UpdatePasswordByID_Call) Return(_a0 error) *MockUserRepository_UpdatePasswordByID_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockUserRepository_UpdatePasswordByID_Call) RunAndReturn(run func(context.Context, repository.UpdatePasswordByIDInput) error) *MockUserRepository_UpdatePasswordByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // WithExecutor provides a mock function with given fields: exec
 func (_m *MockUserRepository) WithExecutor(exec transaction.SqlxTx) repositories.UserRepository {
 	ret := _m.Called(exec)

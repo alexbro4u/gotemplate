@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/alexbro4u/gotemplate/internal/dto/controller"
 	"github.com/alexbro4u/gotemplate/internal/dto/service"
@@ -174,6 +175,55 @@ func (c *Controller) ChangePassword(ctx echo.Context) error {
 		return err
 	}
 
+	return ctx.NoContent(http.StatusNoContent)
+}
+
+func (c *Controller) Logout(ctx echo.Context) error {
+	jti, _ := ctx.Get("token_jti").(string)
+	expiresAt, _ := ctx.Get("token_expires_at").(time.Time)
+	if jti == "" {
+		return ctx.NoContent(http.StatusNoContent)
+	}
+	if err := c.authService.Logout(ctx.Request().Context(), service.LogoutInput{
+		JTI:       jti,
+		ExpiresAt: expiresAt,
+	}); err != nil {
+		return err
+	}
+	return ctx.NoContent(http.StatusNoContent)
+}
+
+func (c *Controller) RequestPasswordReset(ctx echo.Context) error {
+	var req controller.RequestPasswordResetRequest
+	if err := ctx.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if err := c.validator.Struct(req); err != nil {
+		return err
+	}
+	out, err := c.authService.RequestPasswordReset(ctx.Request().Context(), service.RequestPasswordResetInput{
+		Email: req.Email,
+	})
+	if err != nil {
+		return err
+	}
+	return ctx.JSON(http.StatusOK, controller.PasswordResetTokenResponse{Token: out.Token})
+}
+
+func (c *Controller) ConfirmPasswordReset(ctx echo.Context) error {
+	var req controller.ConfirmPasswordResetRequest
+	if err := ctx.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if err := c.validator.Struct(req); err != nil {
+		return err
+	}
+	if err := c.authService.ConfirmPasswordReset(ctx.Request().Context(), service.ConfirmPasswordResetInput{
+		Token:       req.Token,
+		NewPassword: req.NewPassword,
+	}); err != nil {
+		return err
+	}
 	return ctx.NoContent(http.StatusNoContent)
 }
 

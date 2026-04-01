@@ -35,3 +35,16 @@ type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password" validate:"required"`
 	NewPassword string `json:"new_password" validate:"required,min=6"`
 }
+
+type RequestPasswordResetRequest struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+type ConfirmPasswordResetRequest struct {
+	Token       string `json:"token" validate:"required"`
+	NewPassword string `json:"new_password" validate:"required,min=6"`
+}
+
+type PasswordResetTokenResponse struct {
+	Token string `json:"token"`
+}

@@ -1,7 +1,10 @@
 package repositories
 
 type Repositories struct {
-	User         UserRepository
-	UserGroup    UserGroupRepository
-	RequestCache RequestCacheRepository
+	User          UserRepository
+	UserGroup     UserGroupRepository
+	RequestCache  RequestCacheRepository
+	Blacklist     BlacklistRepository
+	Audit         AuditRepository
+	PasswordReset PasswordResetRepository
 }

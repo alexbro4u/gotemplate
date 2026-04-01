@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"log/slog"
+	"strings"
+	"time"
 
 	"github.com/alexbro4u/gotemplate/internal/core/jwt"
 	"github.com/alexbro4u/gotemplate/internal/dto/repository"
@@ -11,27 +13,32 @@ import (
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories"
 	"github.com/alexbro4u/gotemplate/pkg/password"
 	"github.com/alexbro4u/gotemplate/pkg/sqlxadapter"
+	"github.com/google/uuid"
 
 	"github.com/alexbro4u/uowkit/uow"
 	"github.com/go-playground/validator/v10"
 )
 
 type Deps struct {
-	Logger        *slog.Logger                     `validate:"required"`
-	UoW           uow.UnitOfWork                   `validate:"required"`
-	UserRepo      repositories.UserRepository      `validate:"required"`
-	UserGroupRepo repositories.UserGroupRepository `validate:"required"`
-	JWTService    *jwt.Service                     `validate:"required"`
-	Validator     *validator.Validate              `validate:"required"`
+	Logger            *slog.Logger                         `validate:"required"`
+	UoW               uow.UnitOfWork                       `validate:"required"`
+	UserRepo          repositories.UserRepository          `validate:"required"`
+	UserGroupRepo     repositories.UserGroupRepository     `validate:"required"`
+	JWTService        *jwt.Service                         `validate:"required"`
+	Validator         *validator.Validate                  `validate:"required"`
+	BlacklistRepo     repositories.BlacklistRepository     `validate:"required"`
+	PasswordResetRepo repositories.PasswordResetRepository `validate:"required"`
 }
 
 type Service struct {
-	logger        *slog.Logger
-	uow           uow.UnitOfWork
-	userRepo      repositories.UserRepository
-	userGroupRepo repositories.UserGroupRepository
-	jwtService    *jwt.Service
-	validator     *validator.Validate
+	logger            *slog.Logger
+	uow               uow.UnitOfWork
+	userRepo          repositories.UserRepository
+	userGroupRepo     repositories.UserGroupRepository
+	jwtService        *jwt.Service
+	validator         *validator.Validate
+	blacklistRepo     repositories.BlacklistRepository
+	passwordResetRepo repositories.PasswordResetRepository
 }
 
 func New(deps Deps) (*Service, error) {
@@ -40,12 +47,14 @@ func New(deps Deps) (*Service, error) {
 	}
 
 	return &Service{
-		logger:        deps.Logger,
-		uow:           deps.UoW,
-		userRepo:      deps.UserRepo,
-		userGroupRepo: deps.UserGroupRepo,
-		jwtService:    deps.JWTService,
-		validator:     deps.Validator,
+		logger:            deps.Logger,
+		uow:               deps.UoW,
+		userRepo:          deps.UserRepo,
+		userGroupRepo:     deps.UserGroupRepo,
+		jwtService:        deps.JWTService,
+		validator:         deps.Validator,
+		blacklistRepo:     deps.BlacklistRepo,
+		passwordResetRepo: deps.PasswordResetRepo,
 	}, nil
 }
 
@@ -53,6 +62,8 @@ func (s *Service) Register(ctx context.Context, in service.RegisterInput) (*serv
 	if err := s.validator.Struct(in); err != nil {
 		return nil, apperrors.Wrap(err, "validate input")
 	}
+
+	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
 
 	passwordHash, err := password.Hash(in.Password)
 	if err != nil {
@@ -118,6 +129,8 @@ func (s *Service) Login(ctx context.Context, in service.LoginInput) (*service.Lo
 	if err := s.validator.Struct(in); err != nil {
 		return nil, apperrors.Wrap(err, "validate input")
 	}
+
+	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
 
 	userOutput, err := s.userRepo.GetByEmail(ctx, in.Email)
 	if err != nil {
@@ -209,6 +222,11 @@ func (s *Service) UpdateMe(ctx context.Context, in service.UpdateMeInput) error 
 		return apperrors.Wrap(err, "validate input")
 	}
 
+	if in.Email != nil {
+		normalized := strings.ToLower(strings.TrimSpace(*in.Email))
+		in.Email = &normalized
+	}
+
 	err := s.userRepo.Update(ctx, repository.UpdateUserInput{
 		UUID:  in.UserUUID,
 		Email: in.Email,
@@ -222,6 +240,13 @@ func (s *Service) UpdateMe(ctx context.Context, in service.UpdateMeInput) error 
 	}
 
 	return nil
+}
+
+func (s *Service) Logout(ctx context.Context, in service.LogoutInput) error {
+	return s.blacklistRepo.Add(ctx, repository.AddToBlacklistInput{
+		JTI:       in.JTI,
+		ExpiresAt: in.ExpiresAt,
+	})
 }
 
 func (s *Service) ChangePassword(ctx context.Context, in service.ChangePasswordInput) error {
@@ -256,4 +281,62 @@ func (s *Service) ChangePassword(ctx context.Context, in service.ChangePasswordI
 	}
 
 	return nil
+}
+
+const passwordResetTTL = 1 * time.Hour
+
+func (s *Service) RequestPasswordReset(ctx context.Context, in service.RequestPasswordResetInput) (*service.RequestPasswordResetOutput, error) {
+	if err := s.validator.Struct(in); err != nil {
+		return nil, apperrors.Wrap(err, "validate input")
+	}
+
+	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
+
+	userOutput, userErr := s.userRepo.GetByEmail(ctx, in.Email)
+	if userErr != nil {
+		// Do not reveal whether email exists
+		return &service.RequestPasswordResetOutput{Token: ""}, nil //nolint:nilerr // intentional: security — do not reveal if email exists
+	}
+
+	token := uuid.New().String()
+	if createErr := s.passwordResetRepo.Create(ctx, repository.CreatePasswordResetInput{
+		Token:     token,
+		UserID:    userOutput.User.ID,
+		ExpiresAt: time.Now().Add(passwordResetTTL),
+	}); createErr != nil {
+		return nil, apperrors.Wrap(createErr, "create password reset token")
+	}
+
+	return &service.RequestPasswordResetOutput{Token: token}, nil
+}
+
+func (s *Service) ConfirmPasswordReset(ctx context.Context, in service.ConfirmPasswordResetInput) error {
+	if err := s.validator.Struct(in); err != nil {
+		return apperrors.Wrap(err, "validate input")
+	}
+
+	tokenData, tokenErr := s.passwordResetRepo.Get(ctx, repository.GetPasswordResetInput{Token: in.Token})
+	if tokenErr != nil {
+		return apperrors.ErrTokenNotFound
+	}
+	if tokenData.Used {
+		return apperrors.ErrTokenAlreadyUsed
+	}
+	if time.Now().After(tokenData.ExpiresAt) {
+		return apperrors.ErrTokenExpired
+	}
+
+	newHash, err := password.Hash(in.NewPassword)
+	if err != nil {
+		return apperrors.Wrap(err, "hash new password")
+	}
+
+	if updateErr := s.userRepo.UpdatePasswordByID(ctx, repository.UpdatePasswordByIDInput{
+		UserID:       tokenData.UserID,
+		PasswordHash: newHash,
+	}); updateErr != nil {
+		return apperrors.Wrap(updateErr, "update password")
+	}
+
+	return s.passwordResetRepo.MarkUsed(ctx, repository.MarkPasswordResetUsedInput{Token: in.Token})
 }

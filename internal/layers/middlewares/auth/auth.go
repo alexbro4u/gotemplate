@@ -6,10 +6,11 @@ import (
 	"strings"
 
 	"github.com/alexbro4u/gotemplate/internal/core/jwt"
+	"github.com/alexbro4u/gotemplate/pkg/cache"
 	"github.com/labstack/echo/v4"
 )
 
-func Middleware(jwtService *jwt.Service) echo.MiddlewareFunc {
+func Middleware(jwtService *jwt.Service, blacklist cache.Checker) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Получаем токен из заголовка Authorization
@@ -30,6 +31,15 @@ func Middleware(jwtService *jwt.Service) echo.MiddlewareFunc {
 			claims, err := jwtService.ValidateToken(tokenString)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusUnauthorized, "invalid token")
+			}
+
+			if blacklist != nil && blacklist.Has(claims.ID) {
+				return echo.NewHTTPError(http.StatusUnauthorized, "token revoked")
+			}
+
+			c.Set("token_jti", claims.ID)
+			if claims.ExpiresAt != nil {
+				c.Set("token_expires_at", claims.ExpiresAt.Time)
 			}
 
 			// Сохраняем claims в контекст для использования в handlers

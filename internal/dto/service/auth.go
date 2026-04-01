@@ -1,6 +1,8 @@
 package service
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 )
 
@@ -54,4 +56,24 @@ type ChangePasswordInput struct {
 	UserUUID    uuid.UUID `validate:"required"`
 	OldPassword string    `validate:"required"`
 	NewPassword string    `validate:"required,min=6"`
+}
+
+type LogoutInput struct {
+	JTI       string
+	ExpiresAt time.Time
+}
+
+type RequestPasswordResetInput struct {
+	Email string `validate:"required,email"`
+}
+
+type RequestPasswordResetOutput struct {
+	// Token is returned directly (MVP — no email sending).
+	// In production, this would be sent via email instead.
+	Token string
+}
+
+type ConfirmPasswordResetInput struct {
+	Token       string `validate:"required"`
+	NewPassword string `validate:"required,min=6"`
 }

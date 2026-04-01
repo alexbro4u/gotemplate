@@ -1,7 +1,13 @@
 -include .env
 export
 
-.PHONY: help run build test test-integration test-all mocks deps docker-restart migrate-up migrate-down setup
+.DEFAULT_GOAL := help
+
+.PHONY: help run build test test-coverage test-integration test-all mocks deps docker-restart migrate-up migrate-down lint setup
+
+help: ## Show available targets
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+	  awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
 run: ## Запустить приложение
 	go run main.go
@@ -11,6 +17,14 @@ build: ## Собрать приложение
 
 test: ## Запустить unit тесты
 	go test -race ./...
+
+test-coverage: ## Run unit tests with HTML coverage report
+	go test -race -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@go tool cover -func=coverage.out | tail -1
+
+lint: ## Run golangci-lint
+	golangci-lint run
 
 test-integration: ## Запустить интеграционные тесты (поднимает тестовый PostgreSQL в Docker)
 	docker-compose -f docker-compose.test.yml up -d --wait

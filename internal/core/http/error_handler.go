@@ -4,8 +4,10 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/alexbro4u/errkit"
+	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
 )
 
@@ -30,6 +32,21 @@ func newErrorHandler(logger *slog.Logger) echo.HTTPErrorHandler {
 			}
 			_ = c.JSON(he.Code, errorResponse{
 				Error: msg,
+			})
+			return
+		}
+
+		// Validation errors — return per-field details
+		var ve validator.ValidationErrors
+		if errors.As(err, &ve) {
+			fields := make(map[string]any, len(ve))
+			for _, fe := range ve {
+				fields[strings.ToLower(fe.Field())] = fe.Tag()
+			}
+			_ = c.JSON(http.StatusUnprocessableEntity, errorResponse{
+				Error:  "validation failed",
+				Code:   "VALIDATION_FAILED",
+				Fields: fields,
 			})
 			return
 		}

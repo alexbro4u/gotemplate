@@ -1,8 +1,8 @@
 package repository
 
 import (
-	"github.com/google/uuid"
 	"github.com/alexbro4u/gotemplate/internal/entity"
+	"github.com/google/uuid"
 )
 
 type CreateUserInput struct {
@@ -42,4 +42,9 @@ type DeleteUserInput struct {
 type ListUsersOutput struct {
 	Users []*entity.User
 	Total int64
+}
+
+type UpdatePasswordByIDInput struct {
+	UserID       int64
+	PasswordHash string
 }

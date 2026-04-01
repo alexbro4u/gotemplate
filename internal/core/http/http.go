@@ -16,6 +16,7 @@ import (
 	"github.com/alexbro4u/gotemplate/internal/layers/middlewares/auth"
 	"github.com/alexbro4u/gotemplate/internal/layers/middlewares/idempotency"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories"
+	"github.com/alexbro4u/gotemplate/pkg/cache"
 	"github.com/alexbro4u/gotemplate/pkg/echotools/server"
 	"github.com/jmoiron/sqlx"
 
@@ -23,6 +24,11 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/time/rate"
+)
+
+const (
+	hstsMaxAge = 31536000 // 1 year in seconds
+	gzipLevel  = 5
 )
 
 type Deps struct {
@@ -34,6 +40,7 @@ type Deps struct {
 	Repositories *repositories.Repositories `validate:"required"`
 	DB           *sqlx.DB                   `validate:"required"`
 	Validator    *validator.Validate        `validate:"required"`
+	Blacklist    cache.Checker
 }
 
 type Server struct {
@@ -55,14 +62,23 @@ func New(_ context.Context, deps Deps) (*Server, error) {
 
 	// Порядок важен
 	echoInstance.Use(
+		middleware.SecureWithConfig(middleware.SecureConfig{
+			XSSProtection:         "1; mode=block",
+			ContentTypeNosniff:    "nosniff",
+			XFrameOptions:         "DENY",
+			HSTSMaxAge:            hstsMaxAge,
+			HSTSExcludeSubdomains: false,
+		}),
 		middleware.Recover(),
+		requestTimeoutMiddleware(time.Duration(deps.Config.HTTP.RequestTimeoutSec)*time.Second),
 		requestIDMiddleware(),
 		requestLoggingMiddleware(deps.Logger),
 		corsFromConfig(deps.Config.HTTP.CorsAllowedOrigins),
 		deps.Metrics.HTTPMetrics.EchoMiddleware(),
+		middleware.GzipWithConfig(middleware.GzipConfig{Level: gzipLevel}),
 	)
 
-	registerRoutes(echoInstance, deps.Controllers, deps.Metrics, deps.JWTService, deps.Repositories, deps.Config, idempotencyMiddleware)
+	registerRoutes(echoInstance, deps.Controllers, deps.Metrics, deps.JWTService, deps.Repositories, deps.Config, idempotencyMiddleware, deps.Blacklist)
 
 	httpServer, err := server.New(
 		server.Config{
@@ -83,9 +99,8 @@ func New(_ context.Context, deps Deps) (*Server, error) {
 	}, nil
 }
 
-func (s *Server) StartCleanup(ctx context.Context) {
-	// Очищаем кэш каждый час
-	ticker := time.NewTicker(1 * time.Hour)
+func (s *Server) StartCleanup(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -113,7 +128,7 @@ func corsFromConfig(allowedOriginsCSV string) echo.MiddlewareFunc {
 	})
 }
 
-func registerRoutes(e *echo.Echo, controllers *controllers.Controllers, metricsFactory *coremetrics.Factory, jwtService *jwt.Service, _ *repositories.Repositories, cfg *config.Config, idempotencyMiddleware *idempotency.Middleware) {
+func registerRoutes(e *echo.Echo, controllers *controllers.Controllers, metricsFactory *coremetrics.Factory, jwtService *jwt.Service, _ *repositories.Repositories, cfg *config.Config, idempotencyMiddleware *idempotency.Middleware, blacklist cache.Checker) {
 	// Infra endpoints (без версии)
 	e.GET("/ping", controllers.Ping.Ping)
 	e.GET(metrics.HealthEndpointPath, metricsFactory.EchoHealthHandler())
@@ -142,14 +157,17 @@ func registerRoutes(e *echo.Echo, controllers *controllers.Controllers, metricsF
 	}
 	authGroup.POST("/login", controllers.Auth.Login)
 	authGroup.POST("/refresh", controllers.Auth.Refresh)
+	authGroup.POST("/password-reset/request", controllers.Auth.RequestPasswordReset)
+	authGroup.POST("/password-reset/confirm", controllers.Auth.ConfirmPasswordReset)
 
-	protected := v1.Group("", auth.Middleware(jwtService))
+	protected := v1.Group("", auth.Middleware(jwtService, blacklist))
 	protected.Use(idempotencyMiddleware.Middleware())
 
 	// Self-service: любой авторизованный пользователь
 	protected.GET("/me", controllers.Auth.GetMe)
 	protected.PATCH("/me", controllers.Auth.UpdateMe)
 	protected.POST("/me/password", controllers.Auth.ChangePassword)
+	protected.POST("/auth/logout", controllers.Auth.Logout)
 
 	// только admin
 	users := protected.Group("/users", auth.RequireRole("admin"))

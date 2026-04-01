@@ -3,8 +3,9 @@ package idempotency
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
-	"hash/fnv"
+	"encoding/binary"
 	"log/slog"
 	"net/http"
 	"time"
@@ -210,10 +211,13 @@ func (rw *responseWriter) WriteHeader(statusCode int) {
 	rw.ResponseWriter.WriteHeader(statusCode)
 }
 
+func advisoryLockKey(key string) int64 {
+	h := sha256.Sum256([]byte(key))
+	return int64(binary.LittleEndian.Uint64(h[:8])) //nolint:gosec // advisory lock key, overflow is acceptable
+}
+
 func (m *Middleware) getAdvisoryLockKey(idempotencyKey string) int64 {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(idempotencyKey))
-	return int64(h.Sum64()) //nolint:gosec // advisory lock key, overflow is acceptable
+	return advisoryLockKey(idempotencyKey)
 }
 
 func (m *Middleware) acquireXactLock(ctx context.Context, tx *sqlx.Tx, lockKey int64) error {

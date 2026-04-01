@@ -1,15 +1,18 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/alexbro4u/gotemplate/pkg/env"
+	"github.com/go-playground/validator/v10"
 )
 
 type APP struct {
-	LogLevel string `json:"LOG_LEVEL" env:"LOG_LEVEL,default=info"`
-	AppEnv   string `json:"APP_ENV" env:"APP_ENV,required" validate:"oneof=test prod dev"`
+	LogLevel           string `json:"LOG_LEVEL" env:"LOG_LEVEL,default=info"`
+	AppEnv             string `json:"APP_ENV" env:"APP_ENV,required" validate:"oneof=test prod dev"`
+	ShutdownTimeoutSec int    `json:"APP_SHUTDOWN_TIMEOUT_SEC" env:"APP_SHUTDOWN_TIMEOUT_SEC,default=5"`
 }
 
 type HTTP struct {
@@ -23,6 +26,7 @@ type HTTP struct {
 	AuthRateLimitExpiresSec int     `json:"HTTP_AUTH_RATE_LIMIT_EXPIRES_SEC" env:"HTTP_AUTH_RATE_LIMIT_EXPIRES_SEC,default=60"`
 	// Открытая регистрация (true = любой может зарегистрироваться, false = регистрация отключена)
 	RegistrationEnabled bool `json:"HTTP_REGISTRATION_ENABLED" env:"HTTP_REGISTRATION_ENABLED,default=true"`
+	RequestTimeoutSec   int  `json:"HTTP_REQUEST_TIMEOUT_SEC" env:"HTTP_REQUEST_TIMEOUT_SEC,default=30"`
 }
 
 type Postgres struct {
@@ -44,8 +48,9 @@ type Metrics struct {
 }
 
 type Idempotency struct {
-	TTLDays         int `json:"IDEMPOTENCY_TTL_DAYS" env:"IDEMPOTENCY_TTL_DAYS"`
-	MaxCacheEntries int `json:"IDEMPOTENCY_MAX_CACHE_ENTRIES" env:"IDEMPOTENCY_MAX_CACHE_ENTRIES,default=10000"`
+	TTLDays            int `json:"IDEMPOTENCY_TTL_DAYS" env:"IDEMPOTENCY_TTL_DAYS"`
+	MaxCacheEntries    int `json:"IDEMPOTENCY_MAX_CACHE_ENTRIES" env:"IDEMPOTENCY_MAX_CACHE_ENTRIES,default=10000"`
+	CleanupIntervalMin int `json:"IDEMPOTENCY_CLEANUP_INTERVAL_MIN" env:"IDEMPOTENCY_CLEANUP_INTERVAL_MIN,default=60"`
 }
 
 type Jaeger struct {
@@ -70,7 +75,16 @@ func New() (*Config, error) {
 		return nil, fmt.Errorf("parse env: %w", err)
 	}
 
-	if err := validator.New().Struct(cfg); err != nil {
+	validate := validator.New()
+	if err := validate.Struct(cfg); err != nil {
+		var ve validator.ValidationErrors
+		if errors.As(err, &ve) {
+			msgs := make([]string, 0, len(ve))
+			for _, fe := range ve {
+				msgs = append(msgs, fmt.Sprintf("  %s: failed '%s' validation", fe.Field(), fe.Tag()))
+			}
+			return nil, fmt.Errorf("config validation failed:\n%s", strings.Join(msgs, "\n"))
+		}
 		return nil, fmt.Errorf("validate config: %w", err)
 	}
 

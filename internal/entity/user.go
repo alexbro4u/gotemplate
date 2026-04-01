@@ -14,14 +14,15 @@ const (
 )
 
 type User struct {
-	ID           int64     `db:"id"`
-	UUID         uuid.UUID `db:"uuid"`
-	Email        string    `db:"email"`
-	Name         string    `db:"name"`
-	PasswordHash string    `db:"password_hash"`
-	Role         Role      `db:"role"`
-	CreatedAt    time.Time `db:"created_at"`
-	UpdatedAt    time.Time `db:"updated_at"`
+	ID           int64      `db:"id"`
+	UUID         uuid.UUID  `db:"uuid"`
+	Email        string     `db:"email"`
+	Name         string     `db:"name"`
+	PasswordHash string     `db:"password_hash"`
+	Role         Role       `db:"role"`
+	CreatedAt    time.Time  `db:"created_at"`
+	UpdatedAt    time.Time  `db:"updated_at"`
+	DeletedAt    *time.Time `db:"deleted_at"`
 }
 
 func (u *User) IsAdmin() bool {

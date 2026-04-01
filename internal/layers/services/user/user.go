@@ -3,9 +3,11 @@ package user
 import (
 	"context"
 	"log/slog"
+	"strings"
 
 	"github.com/alexbro4u/gotemplate/internal/dto/repository"
 	"github.com/alexbro4u/gotemplate/internal/dto/service"
+	"github.com/alexbro4u/gotemplate/internal/entity"
 	apperrors "github.com/alexbro4u/gotemplate/internal/errors"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories"
 	"github.com/alexbro4u/gotemplate/pkg/password"
@@ -21,6 +23,7 @@ type Deps struct {
 	UserRepo      repositories.UserRepository      `validate:"required"`
 	UserGroupRepo repositories.UserGroupRepository `validate:"required"`
 	Validator     *validator.Validate              `validate:"required"`
+	AuditRepo     repositories.AuditRepository
 }
 
 type Service struct {
@@ -29,6 +32,7 @@ type Service struct {
 	userRepo      repositories.UserRepository
 	userGroupRepo repositories.UserGroupRepository
 	validator     *validator.Validate
+	auditRepo     repositories.AuditRepository
 }
 
 func New(deps Deps) (*Service, error) {
@@ -42,6 +46,7 @@ func New(deps Deps) (*Service, error) {
 		userRepo:      deps.UserRepo,
 		userGroupRepo: deps.UserGroupRepo,
 		validator:     deps.Validator,
+		auditRepo:     deps.AuditRepo,
 	}, nil
 }
 
@@ -49,6 +54,8 @@ func (s *Service) Create(ctx context.Context, in service.CreateUserInput) (*serv
 	if err := s.validator.Struct(in); err != nil {
 		return nil, apperrors.Wrap(err, "validate input")
 	}
+
+	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
 
 	passwordHash, err := password.Hash(in.Password)
 	if err != nil {
@@ -89,9 +96,20 @@ func (s *Service) Create(ctx context.Context, in service.CreateUserInput) (*serv
 		return nil, apperrors.Wrap(txErr, "create user tx")
 	}
 
-	return &service.CreateUserOutput{
+	result := &service.CreateUserOutput{
 		User: service.UserToDTO(output.User),
-	}, nil
+	}
+
+	if s.auditRepo != nil {
+		_ = s.auditRepo.Log(ctx, repository.LogAuditInput{
+			EntityType: "user",
+			EntityID:   output.User.UUID.String(),
+			ActorUUID:  output.User.UUID,
+			Action:     entity.AuditActionCreate,
+		})
+	}
+
+	return result, nil
 }
 
 func (s *Service) Get(ctx context.Context, in service.GetUserInput) (*service.GetUserOutput, error) {
@@ -127,6 +145,15 @@ func (s *Service) Update(ctx context.Context, in service.UpdateUserInput) error 
 		return apperrors.Wrap(err, "update user")
 	}
 
+	if s.auditRepo != nil {
+		_ = s.auditRepo.Log(ctx, repository.LogAuditInput{
+			EntityType: "user",
+			EntityID:   in.UUID.String(),
+			ActorUUID:  in.UUID,
+			Action:     entity.AuditActionUpdate,
+		})
+	}
+
 	return nil
 }
 
@@ -139,6 +166,15 @@ func (s *Service) Delete(ctx context.Context, in service.DeleteUserInput) error 
 			return apperrors.ErrUserNotFound
 		}
 		return apperrors.Wrap(err, "delete user")
+	}
+
+	if s.auditRepo != nil {
+		_ = s.auditRepo.Log(ctx, repository.LogAuditInput{
+			EntityType: "user",
+			EntityID:   in.UUID.String(),
+			ActorUUID:  in.UUID,
+			Action:     entity.AuditActionDelete,
+		})
 	}
 
 	return nil

@@ -16,10 +16,14 @@ import (
 	"github.com/alexbro4u/gotemplate/internal/core/metrics"
 	"github.com/alexbro4u/gotemplate/internal/layers/controllers"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories"
+	auditrepo "github.com/alexbro4u/gotemplate/internal/layers/repositories/audit"
+	passwordresetrepo "github.com/alexbro4u/gotemplate/internal/layers/repositories/password_reset"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories/request_cache"
+	tokenblacklistrepo "github.com/alexbro4u/gotemplate/internal/layers/repositories/token_blacklist"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories/user"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories/user_group"
 	"github.com/alexbro4u/gotemplate/internal/layers/services"
+	"github.com/alexbro4u/gotemplate/pkg/cache"
 	"github.com/alexbro4u/gotemplate/pkg/closer"
 	"github.com/alexbro4u/gotemplate/pkg/pgxtools"
 	"github.com/alexbro4u/gotemplate/pkg/sqlxadapter"
@@ -29,11 +33,10 @@ import (
 )
 
 const (
-	shutdownTimeout     = 5 * time.Second
 	dbConnectionTimeout = 10 * time.Second
 )
 
-func Run(cfg *config.Config) error { //nolint:funlen // application bootstrap
+func Run(cfg *config.Config) error { //nolint:funlen,gocognit // application bootstrap
 	validate := validator.New()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -104,21 +107,53 @@ func Run(cfg *config.Config) error { //nolint:funlen // application bootstrap
 		return err
 	}
 
+	blacklistRepo, err := tokenblacklistrepo.New(tokenblacklistrepo.Deps{
+		DB:        db,
+		Validator: validate,
+	})
+	if err != nil {
+		return err
+	}
+
+	auditRepo, err := auditrepo.New(auditrepo.Deps{
+		DB:        db,
+		Validator: validate,
+	})
+	if err != nil {
+		return err
+	}
+
+	passwordResetRepo, err := passwordresetrepo.New(passwordresetrepo.Deps{
+		DB:        db,
+		Validator: validate,
+	})
+	if err != nil {
+		return err
+	}
+
+	blacklistCache := cache.NewBlacklist()
+
 	repositoriesInstance := &repositories.Repositories{
-		User:         userRepo,
-		UserGroup:    userGroupRepo,
-		RequestCache: requestCacheRepo,
+		User:          userRepo,
+		UserGroup:     userGroupRepo,
+		RequestCache:  requestCacheRepo,
+		Blacklist:     blacklistRepo,
+		Audit:         auditRepo,
+		PasswordReset: passwordResetRepo,
 	}
 
 	txFactory := sqlxadapter.NewTxFactory(db, nil)
 	unitOfWork := uow.New(txFactory, uow.WithLogger(logger))
 
 	servicesInstance, err := services.New(services.Deps{
-		Logger:       logger,
-		Repositories: repositoriesInstance,
-		UoW:          unitOfWork,
-		JWTService:   jwtService,
-		Validator:    validate,
+		Logger:        logger,
+		Repositories:  repositoriesInstance,
+		UoW:           unitOfWork,
+		JWTService:    jwtService,
+		Validator:     validate,
+		Blacklist:     blacklistRepo,
+		AuditRepo:     auditRepo,
+		PasswordReset: passwordResetRepo,
 	})
 	if err != nil {
 		return err
@@ -143,6 +178,7 @@ func Run(cfg *config.Config) error { //nolint:funlen // application bootstrap
 		Repositories: repositoriesInstance,
 		DB:           db,
 		Validator:    validate,
+		Blacklist:    blacklistCache,
 	})
 	if err != nil {
 		return err
@@ -169,7 +205,27 @@ func Run(cfg *config.Config) error { //nolint:funlen // application bootstrap
 	logger.Info("application started successfully")
 
 	//  Очистка кэша идемпотентности
-	go httpServer.StartCleanup(ctx)
+	go httpServer.StartCleanup(ctx, time.Duration(cfg.Idempotency.CleanupIntervalMin)*time.Minute)
+
+	// Очистка просроченных токенов из блэклиста
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				blacklistCache.Cleanup()
+				if cleanupErr := blacklistRepo.DeleteExpired(ctx); cleanupErr != nil {
+					logger.WarnContext(ctx, "failed to cleanup token blacklist", "error", cleanupErr)
+				}
+				if cleanupErr := passwordResetRepo.DeleteExpired(ctx); cleanupErr != nil {
+					logger.WarnContext(ctx, "failed to cleanup password reset tokens", "error", cleanupErr)
+				}
+			}
+		}
+	}()
 
 	serverErr := make(chan error, 1)
 	go func() {
@@ -189,7 +245,7 @@ func Run(cfg *config.Config) error { //nolint:funlen // application bootstrap
 	logger.Info("shutting down application gracefully")
 
 	// Graceful shutdown
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Duration(cfg.APP.ShutdownTimeoutSec)*time.Second)
 	defer shutdownCancel()
 
 	if closeErr := closerInstance.Close(shutdownCtx); closeErr != nil {

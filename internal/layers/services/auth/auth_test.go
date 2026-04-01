@@ -26,29 +26,35 @@ import (
 const testSecretKey = "test-secret-key-for-unit-tests-minimum-32-chars!!"
 
 type authTestSuite struct {
-	svc           *authservice.Service
-	userRepo      *mocks.MockUserRepository
-	userGroupRepo *mocks.MockUserGroupRepository
-	uow           *mocks.MockUnitOfWork
-	jwtSvc        *jwt.Service
+	svc               *authservice.Service
+	userRepo          *mocks.MockUserRepository
+	userGroupRepo     *mocks.MockUserGroupRepository
+	uow               *mocks.MockUnitOfWork
+	jwtSvc            *jwt.Service
+	blacklistRepo     *mocks.MockBlacklistRepository
+	passwordResetRepo *mocks.MockPasswordResetRepository
 }
 
 func setupAuthTest(t *testing.T) *authTestSuite {
 	t.Helper()
 	s := &authTestSuite{
-		userRepo:      mocks.NewMockUserRepository(t),
-		userGroupRepo: mocks.NewMockUserGroupRepository(t),
-		uow:           mocks.NewMockUnitOfWork(t),
-		jwtSvc:        jwt.New(testSecretKey),
+		userRepo:          mocks.NewMockUserRepository(t),
+		userGroupRepo:     mocks.NewMockUserGroupRepository(t),
+		uow:               mocks.NewMockUnitOfWork(t),
+		jwtSvc:            jwt.New(testSecretKey),
+		blacklistRepo:     mocks.NewMockBlacklistRepository(t),
+		passwordResetRepo: mocks.NewMockPasswordResetRepository(t),
 	}
 	var err error
 	s.svc, err = authservice.New(authservice.Deps{
-		Logger:        slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})),
-		UoW:           s.uow,
-		UserRepo:      s.userRepo,
-		UserGroupRepo: s.userGroupRepo,
-		JWTService:    s.jwtSvc,
-		Validator:     validator.New(),
+		Logger:            slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})),
+		UoW:               s.uow,
+		UserRepo:          s.userRepo,
+		UserGroupRepo:     s.userGroupRepo,
+		JWTService:        s.jwtSvc,
+		Validator:         validator.New(),
+		BlacklistRepo:     s.blacklistRepo,
+		PasswordResetRepo: s.passwordResetRepo,
 	})
 	require.NoError(t, err)
 	return s
