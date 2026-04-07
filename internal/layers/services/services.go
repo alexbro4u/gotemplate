@@ -7,19 +7,21 @@ import (
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories"
 	"github.com/alexbro4u/gotemplate/internal/layers/services/auth"
 	"github.com/alexbro4u/gotemplate/internal/layers/services/user"
+	"github.com/alexbro4u/gotemplate/pkg/cache"
 	"github.com/alexbro4u/uowkit/uow"
 	"github.com/go-playground/validator/v10"
 )
 
 type Deps struct {
-	Logger        *slog.Logger                     `validate:"required"`
-	Repositories  *repositories.Repositories       `validate:"required"`
-	UoW           uow.UnitOfWork                   `validate:"required"`
-	JWTService    *jwt.Service                     `validate:"required"`
-	Validator     *validator.Validate              `validate:"required"`
-	Blacklist     repositories.BlacklistRepository `validate:"required"`
-	AuditRepo     repositories.AuditRepository
-	PasswordReset repositories.PasswordResetRepository `validate:"required"`
+	Logger         *slog.Logger                     `validate:"required"`
+	Repositories   *repositories.Repositories       `validate:"required"`
+	UoW            uow.UnitOfWork                   `validate:"required"`
+	JWTService     *jwt.Service                     `validate:"required"`
+	Validator      *validator.Validate              `validate:"required"`
+	Blacklist      repositories.BlacklistRepository `validate:"required"`
+	BlacklistCache cache.Adder                      `validate:"required"`
+	AuditRepo      repositories.AuditRepository
+	PasswordReset  repositories.PasswordResetRepository `validate:"required"`
 }
 
 type Services struct {
@@ -52,6 +54,7 @@ func New(deps Deps) (*Services, error) {
 		JWTService:        deps.JWTService,
 		Validator:         deps.Validator,
 		BlacklistRepo:     deps.Blacklist,
+		BlacklistCache:    deps.BlacklistCache,
 		PasswordResetRepo: deps.PasswordReset,
 	})
 	if err != nil {

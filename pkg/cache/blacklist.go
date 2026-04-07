@@ -10,6 +10,11 @@ type Checker interface {
 	Has(jti string) bool
 }
 
+// Adder is implemented by any blacklist that can accept new revoked JTIs.
+type Adder interface {
+	Add(jti string, expiresAt time.Time)
+}
+
 type blacklistEntry struct {
 	expiresAt time.Time
 }

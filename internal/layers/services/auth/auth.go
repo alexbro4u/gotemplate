@@ -11,6 +11,7 @@ import (
 	"github.com/alexbro4u/gotemplate/internal/dto/service"
 	apperrors "github.com/alexbro4u/gotemplate/internal/errors"
 	"github.com/alexbro4u/gotemplate/internal/layers/repositories"
+	"github.com/alexbro4u/gotemplate/pkg/cache"
 	"github.com/alexbro4u/gotemplate/pkg/password"
 	"github.com/alexbro4u/gotemplate/pkg/sqlxadapter"
 	"github.com/google/uuid"
@@ -27,6 +28,7 @@ type Deps struct {
 	JWTService        *jwt.Service                         `validate:"required"`
 	Validator         *validator.Validate                  `validate:"required"`
 	BlacklistRepo     repositories.BlacklistRepository     `validate:"required"`
+	BlacklistCache    cache.Adder                          `validate:"required"`
 	PasswordResetRepo repositories.PasswordResetRepository `validate:"required"`
 }
 
@@ -38,6 +40,7 @@ type Service struct {
 	jwtService        *jwt.Service
 	validator         *validator.Validate
 	blacklistRepo     repositories.BlacklistRepository
+	blacklistCache    cache.Adder
 	passwordResetRepo repositories.PasswordResetRepository
 }
 
@@ -54,6 +57,7 @@ func New(deps Deps) (*Service, error) {
 		jwtService:        deps.JWTService,
 		validator:         deps.Validator,
 		blacklistRepo:     deps.BlacklistRepo,
+		blacklistCache:    deps.BlacklistCache,
 		passwordResetRepo: deps.PasswordResetRepo,
 	}, nil
 }
@@ -243,10 +247,14 @@ func (s *Service) UpdateMe(ctx context.Context, in service.UpdateMeInput) error 
 }
 
 func (s *Service) Logout(ctx context.Context, in service.LogoutInput) error {
-	return s.blacklistRepo.Add(ctx, repository.AddToBlacklistInput{
+	if err := s.blacklistRepo.Add(ctx, repository.AddToBlacklistInput{
 		JTI:       in.JTI,
 		ExpiresAt: in.ExpiresAt,
-	})
+	}); err != nil {
+		return err
+	}
+	s.blacklistCache.Add(in.JTI, in.ExpiresAt)
+	return nil
 }
 
 func (s *Service) ChangePassword(ctx context.Context, in service.ChangePasswordInput) error {

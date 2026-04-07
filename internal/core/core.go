@@ -146,14 +146,15 @@ func Run(cfg *config.Config) error { //nolint:funlen,gocognit // application boo
 	unitOfWork := uow.New(txFactory, uow.WithLogger(logger))
 
 	servicesInstance, err := services.New(services.Deps{
-		Logger:        logger,
-		Repositories:  repositoriesInstance,
-		UoW:           unitOfWork,
-		JWTService:    jwtService,
-		Validator:     validate,
-		Blacklist:     blacklistRepo,
-		AuditRepo:     auditRepo,
-		PasswordReset: passwordResetRepo,
+		Logger:         logger,
+		Repositories:   repositoriesInstance,
+		UoW:            unitOfWork,
+		JWTService:     jwtService,
+		Validator:      validate,
+		Blacklist:      blacklistRepo,
+		BlacklistCache: blacklistCache,
+		AuditRepo:      auditRepo,
+		PasswordReset:  passwordResetRepo,
 	})
 	if err != nil {
 		return err
