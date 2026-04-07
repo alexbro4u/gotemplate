@@ -40,7 +40,7 @@ func (c *Controller) Create(ctx echo.Context) error {
 	}
 
 	if err := c.validator.Struct(req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "validation failed")
+		return err
 	}
 
 	output, err := c.userService.Create(ctx.Request().Context(), service.CreateUserInput{
@@ -83,7 +83,7 @@ func (c *Controller) Update(ctx echo.Context) error {
 	}
 
 	if validErr := c.validator.Struct(req); validErr != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "validation failed")
+		return validErr
 	}
 
 	err = c.userService.Update(ctx.Request().Context(), service.UpdateUserInput{
@@ -138,7 +138,7 @@ func (c *Controller) List(ctx echo.Context) error {
 	}
 
 	if err := c.validator.Struct(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "validation failed")
+		return err
 	}
 
 	output, err := c.userService.List(ctx.Request().Context(), service.ListUsersInput{

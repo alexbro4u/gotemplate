@@ -41,7 +41,7 @@ func (c *Controller) Register(ctx echo.Context) error {
 	}
 
 	if err := c.validator.Struct(req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "validation failed")
+		return err
 	}
 
 	output, err := c.authService.Register(ctx.Request().Context(), service.RegisterInput{
@@ -67,7 +67,7 @@ func (c *Controller) Login(ctx echo.Context) error {
 	}
 
 	if err := c.validator.Struct(req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "validation failed")
+		return err
 	}
 
 	output, err := c.authService.Login(ctx.Request().Context(), service.LoginInput{
@@ -92,7 +92,7 @@ func (c *Controller) Refresh(ctx echo.Context) error {
 	}
 
 	if err := c.validator.Struct(req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "validation failed")
+		return err
 	}
 
 	output, err := c.authService.Refresh(ctx.Request().Context(), service.RefreshInput{
@@ -136,7 +136,7 @@ func (c *Controller) UpdateMe(ctx echo.Context) error {
 	}
 
 	if validErr := c.validator.Struct(req); validErr != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "validation failed")
+		return validErr
 	}
 
 	err = c.authService.UpdateMe(ctx.Request().Context(), service.UpdateMeInput{
@@ -163,7 +163,7 @@ func (c *Controller) ChangePassword(ctx echo.Context) error {
 	}
 
 	if validErr := c.validator.Struct(req); validErr != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "validation failed")
+		return validErr
 	}
 
 	jti, _ := ctx.Get("token_jti").(string)
