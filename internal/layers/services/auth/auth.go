@@ -288,6 +288,17 @@ func (s *Service) ChangePassword(ctx context.Context, in service.ChangePasswordI
 		return apperrors.Wrap(updErr, "update password")
 	}
 
+	if in.JTI != "" {
+		if blErr := s.blacklistRepo.Add(ctx, repository.AddToBlacklistInput{
+			JTI:       in.JTI,
+			ExpiresAt: in.ExpiresAt,
+		}); blErr != nil {
+			s.logger.WarnContext(ctx, "failed to blacklist token after password change", "error", blErr)
+		} else {
+			s.blacklistCache.Add(in.JTI, in.ExpiresAt)
+		}
+	}
+
 	return nil
 }
 

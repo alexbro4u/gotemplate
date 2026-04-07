@@ -166,10 +166,15 @@ func (c *Controller) ChangePassword(ctx echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "validation failed")
 	}
 
+	jti, _ := ctx.Get("token_jti").(string)
+	expiresAt, _ := ctx.Get("token_expires_at").(time.Time)
+
 	err = c.authService.ChangePassword(ctx.Request().Context(), service.ChangePasswordInput{
 		UserUUID:    userUUID,
 		OldPassword: req.OldPassword,
 		NewPassword: req.NewPassword,
+		JTI:         jti,
+		ExpiresAt:   expiresAt,
 	})
 	if err != nil {
 		return err

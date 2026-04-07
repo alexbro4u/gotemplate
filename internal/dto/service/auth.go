@@ -56,6 +56,8 @@ type ChangePasswordInput struct {
 	UserUUID    uuid.UUID `validate:"required"`
 	OldPassword string    `validate:"required"`
 	NewPassword string    `validate:"required,min=6"`
+	JTI         string
+	ExpiresAt   time.Time
 }
 
 type LogoutInput struct {
